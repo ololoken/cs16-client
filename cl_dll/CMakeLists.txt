@@ -58,7 +58,14 @@ else()
 	add_definitions(-D_CRT_SECURE_NO_WARNINGS -D_CRT_NONSTDC_NO_DEPRECATE)
 endif()
 
-add_library(${CLIENT_LIB} SHARED ${CS_CLIENT_SRC})
+if(XASH_EMSCRIPTEN)
+	add_executable(${CLIENT_LIB} ${CS_CLIENT_SRC})
+	target_compile_options(${CLIENT_LIB} PRIVATE -fPIC)
+	target_link_options(${CLIENT_LIB} PRIVATE -sSIDE_MODULE=1)
+	set_target_properties(${CLIENT_LIB} PROPERTIES SUFFIX ".wasm")
+else()
+	add_library(${CLIENT_LIB} SHARED ${CS_CLIENT_SRC})
+endif()
 
 set_target_postfix(${CLIENT_LIB})
 
