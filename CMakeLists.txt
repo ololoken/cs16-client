@@ -47,10 +47,9 @@ if(BUILD_SERVER)
 	# 	BUILD_IN_SOURCE 1
 	# 	INSTALL_COMMAND meson install -C build --destdir ${CMAKE_INSTALL_PREFIX}
 	# )
-	if(NOT XASH_EMSCRIPTEN)
-		add_subdirectory(3rdparty/yapb)
-		set_target_postfix(yapb)
-	endif()
+
+	add_subdirectory(3rdparty/yapb)
+	set_target_postfix(yapb)
 
 	set(XASH_COMPAT ON CACHE BOOL "" FORCE)
 	add_subdirectory(3rdparty/ReGameDLL_CS)
