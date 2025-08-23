@@ -1,5 +1,5 @@
 name: Build and Deploy
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 jobs:
   android:
@@ -73,7 +73,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        arch: ['x86', 'amd64']
+        arch: [ 'x86', 'amd64' ]
       fail-fast: false
     steps:
       - name: Checkout sources
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: ['i386', 'amd64']
+        arch: [ 'i386', 'amd64' ]
       fail-fast: false
     steps:
       - name: Checkout sources
@@ -129,11 +129,49 @@ jobs:
         with:
           name: ${{ runner.os }}-${{ matrix.arch }}
           path: build/*.tar.gz
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [ 'x86_64', 'arm64' ]
+      fail-fast: false
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          arch -${{ matrix.arch }} /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            arch -${{ matrix.arch }} brew install cmake gcc ninja fontconfig
+          else
+            arch -${{ matrix.arch }} /usr/local/bin/brew install cmake gcc ninja fontconfig
+          fi
+      - name: Configure
+        run: cmake --preset "macos-ci-${{ matrix.arch }}"
+      - name: Build and Package
+        run: |
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            arch -${{ matrix.arch }} cmake --build .
+            arch -${{ matrix.arch }} cpack --config CPackConfig.cmake
+          else
+            arch -${{ matrix.arch }} /usr/local/bin/cmake --build .
+            arch -${{ matrix.arch }} /usr/local/bin/cpack --config CPackConfig.cmake
+          fi
+        working-directory: build
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os }}-${{ matrix.arch }}
+          path: build/*.zip
   release:
     name: Release
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    needs: [android, windows, linux, psvita]
+    needs: [ android, windows, linux, psvita, macos ]
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
@@ -141,7 +179,7 @@ jobs:
         run: |
           TAG_NAME=${{ github.ref_name == 'main' && 'continuous' || format('continuous-{0}', github.ref_name) }}
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          if gh release list | grep -q -e "$TAG_NAME"; then
+          if gh release list --repo ${{ github.repository }} | grep -q -e "$TAG_NAME"; then
             gh release delete "$TAG_NAME" --yes --cleanup-tag --repo ${{ github.repository }}
           fi
         env:
