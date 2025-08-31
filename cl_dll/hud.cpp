@@ -36,6 +36,10 @@
 
 #include "draw_util.h"
 
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #if _WIN32
 #define strncasecmp _strnicmp
 #endif
@@ -424,6 +428,10 @@ void CHud :: VidInit( void )
 
 	m_truescrinfo.iWidth = CVAR_GET_FLOAT("width");
 	m_truescrinfo.iHeight = CVAR_GET_FLOAT("height");
+#if __EMSCRIPTEN__
+	m_truescrinfo.iWidth *= emscripten_get_device_pixel_ratio();
+	m_truescrinfo.iHeight *= emscripten_get_device_pixel_ratio();
+#endif
 
 	// ----------
 	// Load Sprites
