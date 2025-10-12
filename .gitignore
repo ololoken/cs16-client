@@ -64,3 +64,5 @@ release/
 *.tasks
 regamebuild/
 .vs/
+
+.DS_Store
