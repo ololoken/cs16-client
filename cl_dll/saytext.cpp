@@ -55,7 +55,7 @@ int CHudSayText :: Init( void )
 
 	InitHUDData();
 
-	m_HUD_saytext =			gEngfuncs.pfnRegisterVariable( "hud_saytext", "1", 0 );
+	m_HUD_saytext =			gEngfuncs.pfnRegisterVariable( "hud_saytext_internal", "1", 0 );
 	m_HUD_saytext_time =	gEngfuncs.pfnRegisterVariable( "hud_saytext_time", "5", 0 );
 
 	m_iFlags |= HUD_INTERMISSION; // is always drawn during an intermission
@@ -99,7 +99,8 @@ int CHudSayText :: Draw( float flTime )
 	int y = Y_START;
 
 	//if ( ( gViewPort && gViewPort->AllowedToPrintText() == FALSE) || !m_HUD_saytext->value )
-		//return 1;
+	if ( !m_HUD_saytext->value )
+		return 1;
 
 	// make sure the scrolltime is within reasonable bounds,  to guard against the clock being reset
 	flScrollTime = min( flScrollTime, flTime + m_HUD_saytext_time->value );
