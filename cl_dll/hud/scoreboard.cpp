@@ -436,7 +436,7 @@ int CHudScoreboard :: DrawPlayers( float list_slot, int nameoffset, const char *
 		int ypos = ystart + (list_slot * ROW_GAP);
 
 		// check we haven't drawn too far down
-		if ( ypos > yend )  // don't draw to close to the lower border
+		if ( ypos + ROW_GAP > yend )  // don't draw to close to the lower border
 			break;
 
 		int r = 255, g = 255, b = 255;

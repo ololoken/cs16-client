@@ -168,10 +168,10 @@ int CHudSpectatorGui::Draw( float flTime )
 
 
 	{ // draw team here
-		int iLen = DrawUtils::HudStringLen("Counter-Terrorists:" );
+		int iLen = DrawUtils::HudStringLen(Localize( "#Cstrike_ScoreBoard_CT" ) );
 
-		DrawUtils::DrawHudString( INT_XPOS(12.5) - iLen - 50 , INT_YPOS(2) * 0.25, INT_XPOS(12.5) - 50, "Counter-Terrorists:", r, g, b );
-		DrawUtils::DrawHudString( INT_XPOS(12.5) - iLen - 50, INT_YPOS(2) * 0.5, INT_XPOS(12.5) - 50, "Terrorists:", r, g, b );
+		DrawUtils::DrawHudString( INT_XPOS(12.5) - iLen - 50 , INT_YPOS(2) * 0.25, INT_XPOS(12.5) - 50, Localize( "#Cstrike_ScoreBoard_CT" ), r, g, b );
+		DrawUtils::DrawHudString( INT_XPOS(12.5) - iLen - 50, INT_YPOS(2) * 0.5, INT_XPOS(12.5) - 50, Localize( "#Cstrike_ScoreBoard_Ter" ), r, g, b );
 		// count
 		DrawUtils::DrawHudNumberString( INT_XPOS(12.5) - 10, INT_YPOS(2) * 0.25, INT_XPOS(12.5) - 50, label.m_iCounterTerrorists, r, g, b );
 		DrawUtils::DrawHudNumberString( INT_XPOS(12.5) - 10, INT_YPOS(2) * 0.5,  INT_XPOS(12.5) - 50, label.m_iTerrorists,        r, g, b );
@@ -236,7 +236,7 @@ void CHudSpectatorGui::CalcAllNeededData( )
 		const char *szMapName = gEngfuncs.pfnGetLevelName(); //  "maps/%s.bsp"
 		strncpy( szMapNameStripped, szMapName + 5, sizeof( szMapNameStripped ) );
 		szMapNameStripped[strlen(szMapNameStripped) - 4] = '\0';
-		snprintf( label.m_szMap, sizeof( label.m_szMap ), "Map: %s", szMapNameStripped );
+		snprintf( label.m_szMap, sizeof( label.m_szMap ), "%s: %s", Localize("#Cstrike_TitlesTXT_Spec_Map"), szMapNameStripped );
 	}
 
 	// team
