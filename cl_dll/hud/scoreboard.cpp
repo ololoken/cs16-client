@@ -17,19 +17,18 @@
 //
 // implementation of CHudScoreboard class
 //
-
+#include <string.h>
+#include <stdio.h>
+#include <ctype.h>
 #include "hud.h"
 #include "cl_util.h"
 #include "parsemsg.h"
 #include "triangleapi.h"
 #include "com_weapons.h"
 #include "cdll_dll.h"
-
-#include <string.h>
-#include <stdio.h>
 #include "draw_util.h"
 #include "vgui_parser.h"
-#include <ctype.h>
+#include "eventscripts.h"
 
 hud_player_info_t   g_PlayerInfoList[MAX_PLAYERS+1]; // player info from the engine
 extra_player_info_t	g_PlayerExtraInfo[MAX_PLAYERS+1]; // additional player info sent directly to the client dll
@@ -136,6 +135,11 @@ void CHudScoreboard :: InitHUDData( void )
 
 	for ( int i = 1; i <= MAX_PLAYERS; i++ )
 	{
+		// a1ba: get the cl.playernum from the engine
+		// it shouldn't ever change during normal gameplay
+		if( !m_iPlayerNum && EV_IsLocal( i ))
+			m_iPlayerNum = i;
+
 		g_PlayerExtraInfo[i].sb_health = -1;
 		g_PlayerExtraInfo[i].sb_account = -1;
 	}
@@ -200,14 +204,23 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 
 	// calculate columns sizes
 	g_Columns[COL_PING] = Column( xend - 15, Localize( "#PlayerPing" ) );
+	g_Columns[COL_PING].end = min( g_Columns[COL_PING].end, g_Columns[COL_PING].start - DrawUtils::HudStringLen( "9999" ) );
+
 	g_Columns[COL_DEATHS] = Column( g_Columns[COL_PING].end - 10, Localize( "#PlayerDeath" ) );
+	g_Columns[COL_DEATHS].end = min( g_Columns[COL_DEATHS].end, g_Columns[COL_DEATHS].start - DrawUtils::HudStringLen( "9999" ) );
+
 	g_Columns[COL_KILLS] = Column( g_Columns[COL_DEATHS].end - 10, Localize( "#PlayerScore" ) );
+	g_Columns[COL_KILLS].end = min( g_Columns[COL_KILLS].end, g_Columns[COL_KILLS].start - DrawUtils::HudStringLen( "9999" ) );
+
 	g_Columns[COL_MONEY] = Column( g_Columns[COL_KILLS].end - 10, Localize( "#Cstrike_ACCOUNT" ) );
-	g_Columns[COL_MONEY].end = g_Columns[COL_MONEY].start - DrawUtils::HudStringLen( "$16000" );
+	g_Columns[COL_MONEY].end = min( g_Columns[COL_MONEY].end, g_Columns[COL_MONEY].start - DrawUtils::HudStringLen( "$999999" ) );
+
 	g_Columns[COL_HP] = Column( g_Columns[COL_MONEY].end - 10, Localize( "#Cstrike_HEALTH" ) );
-	g_Columns[COL_HP].end = g_Columns[COL_HP].start - DrawUtils::HudStringLen( "100" );
+	g_Columns[COL_HP].end = min( g_Columns[COL_HP].end, g_Columns[COL_HP].start - DrawUtils::HudStringLen( "999999" ) );
+
 	g_Columns[COL_ATTRIB] = Column( g_Columns[COL_HP].end - 10 );
 	g_Columns[COL_ATTRIB].end = g_Columns[COL_ATTRIB].start - DrawUtils::HudStringLen( "#Cstrike_DEFUSE_KIT" );
+
 	g_Columns[COL_NAME] = Column( xstart + 15, nullptr, false );
 	g_Columns[COL_NAME].end = g_Columns[COL_ATTRIB].end - 10;
 
@@ -360,23 +373,32 @@ int CHudScoreboard :: DrawTeams( float list_slot )
 		char fmtString[32];
 		const char *fmtStringName = team_info->players == 1 ? "#Cstrike_ScoreBoard_Player" : "#Cstrike_ScoreBoard_Players";
 		strncpy( fmtString, Localize( fmtStringName ), sizeof( fmtString ) );
+		fmtString[sizeof( fmtString ) - 1] = 0;
 
 		if ( !strcmp( fmtString, fmtStringName ) )
-			strncpy( fmtString, team_info->players == 1 ? "%s    -   %s player" : "%s    -   %s players", sizeof( fmtString ) );
-		else
-			Localize_StripIndices( fmtString );
+		{
+			const char *fallback = team_info->players == 1 ? "%s1    -   %s2 player" : "%s1    -   %s2 players";
+			strncpy( fmtString, fallback, sizeof( fmtString ) );
+			fmtString[sizeof( fmtString ) - 1] = 0;
+		}
 
 		GetTeamColor( r, g, b, team_info->teamnumber );
 		switch ( team_info->teamnumber )
 		{
 		case TEAM_TERRORIST:
-			snprintf( teamName, sizeof( teamName ), fmtString, Localize( "#Cstrike_ScoreBoard_Ter" ), numPlayers );
+		{
+			const char *args[2] = { Localize( "#Cstrike_ScoreBoard_Ter" ), numPlayers };
+			Localize_Format( teamName, sizeof( teamName ), fmtString, args, 2 );
 			DrawUtils::DrawHudNumberString( g_Columns[COL_KILLS].start, ypos, g_Columns[COL_KILLS].end, team_info->frags, r, g, b );
 			break;
+		}
 		case TEAM_CT:
-			snprintf( teamName, sizeof( teamName ), fmtString, Localize( "#Cstrike_ScoreBoard_CT" ), numPlayers );
+		{
+			const char *args[2] = { Localize( "#Cstrike_ScoreBoard_CT" ), numPlayers };
+			Localize_Format( teamName, sizeof( teamName ), fmtString, args, 2 );
 			DrawUtils::DrawHudNumberString( g_Columns[COL_KILLS].start, ypos, g_Columns[COL_KILLS].end, team_info->frags, r, g, b );
 			break;
+		}
 		case TEAM_SPECTATOR:
 		case TEAM_UNASSIGNED:
 			strncpy( teamName, Localize( "#Spectators" ), sizeof( teamName ) );
@@ -532,13 +554,10 @@ int CHudScoreboard :: DrawPlayers( float list_slot, int nameoffset, const char *
 
 void CHudScoreboard :: GetAllPlayersInfo( void )
 {
-	for ( int i = 1; i < MAX_PLAYERS; i++ )
-	{
-		GetPlayerInfo( i, &g_PlayerInfoList[i] );
+	memset( &g_PlayerInfoList[0], 0, sizeof( g_PlayerInfoList[0] ));
 
-		if ( g_PlayerInfoList[i].thisplayer )
-			m_iPlayerNum = i;  // !!!HACK: this should be initialized elsewhere... maybe gotten from the engine
-	}
+	for( int i = 1; i < MAX_PLAYERS; i++ )
+		GetPlayerInfo( i, &g_PlayerInfoList[i] );
 }
 
 int CHudScoreboard :: MsgFunc_ScoreInfo( const char *pszName, int iSize, void *pbuf )
@@ -550,14 +569,13 @@ int CHudScoreboard :: MsgFunc_ScoreInfo( const char *pszName, int iSize, void *p
 	short frags = reader.ReadShort();
 	short deaths = reader.ReadShort();
 	short playerclass = reader.ReadShort();
-	short teamnumber = reader.ReadShort();
+	reader.ReadShort();
 
 	if ( cl > 0 && cl <= MAX_PLAYERS )
 	{
 		g_PlayerExtraInfo[cl].frags = frags;
 		g_PlayerExtraInfo[cl].deaths = deaths;
 		g_PlayerExtraInfo[cl].playerclass = playerclass;
-		g_PlayerExtraInfo[cl].teamnumber = teamnumber;
 
 		//gViewPort->UpdateOnPlayerInfo();
 	}
@@ -586,9 +604,13 @@ int CHudScoreboard :: MsgFunc_TeamInfo( const char *pszName, int iSize, void *pb
 			teamNumber = TEAM_TERRORIST;
 		else if( !strcmp( teamName, "CT") )
 			teamNumber = TEAM_CT;
-		else if( !strcmp( teamName, "SPECTATOR" ) || !strcmp( teamName, "UNASSIGNED" ) )
+		else if( !strcmp( teamName, "SPECTATOR" ) )
 		{
 			teamNumber = TEAM_SPECTATOR;
+		}
+		else if( !strcmp( teamName, "UNASSIGNED" ) )
+		{
+			teamNumber = TEAM_UNASSIGNED;
 			strncpy( teamName, "SPECTATOR", MAX_TEAM_NAME );
 		}
 		// just in case

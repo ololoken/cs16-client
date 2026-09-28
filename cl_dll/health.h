@@ -95,7 +95,16 @@ struct DAMAGE_IMAGE
 	float fBaseline;
 	int	x, y;
 };
-	
+
+enum
+{
+	ATK_FRONT = 0,
+	ATK_RIGHT,
+	ATK_REAR,
+	ATK_LEFT,
+	ATK_COUNT
+};
+
 //
 //-----------------------------------------------------
 //
@@ -118,7 +127,7 @@ public:
 	int m_HUD_dmg_bio;
 	int m_HUD_cross;
 	//float m_fAttackFront, m_fAttackRear, m_fAttackLeft, m_fAttackRight;
-	float m_fAttack[4];
+	float m_fAttack[ATK_COUNT];
 	void GetPainColor(int &r, int &g, int &b , int &a);
 	float m_fFade;
 
@@ -132,7 +141,7 @@ private:
 
 	HSPRITE m_hSprite;
 	HSPRITE m_hDamage;
-	Vector2D m_vAttackPos[4];
+	Vector2D m_vAttackPos[ATK_COUNT];
 	DAMAGE_IMAGE m_dmg[NUM_DMG_TYPES];
 	float m_flTimeFlash;
 	int	m_bitsDamage;

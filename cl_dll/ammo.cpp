@@ -26,6 +26,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include "strl.h"
 
 #include "ammohistory.h"
 #include "eventscripts.h"
@@ -564,7 +565,7 @@ int CHudAmmo::MsgFunc_HideWeapon( const char *pszName, int iSize, void *pbuf )
 	if (gEngfuncs.IsSpectateOnly())
 		return 1;
 
-	if ( gHUD.m_iHideHUDDisplay & ( HIDEHUD_WEAPONS | HIDEHUD_FLASHLIGHT | HIDEHUD_ALL ) )
+	if ( gHUD.m_iHideHUDDisplay & ( HIDEHUD_WEAPONS | HIDEHUD_FLASHLIGHT | HIDEHUD_ALL | HIDEHUD_CROSSHAIR ) )
 	{
 		gpActiveSel = NULL;
 		HideCrosshair();
@@ -580,11 +581,19 @@ int CHudAmmo::MsgFunc_HideWeapon( const char *pszName, int iSize, void *pbuf )
 //
 int CHudAmmo::MsgFunc_CurWeapon(const char *pszName, int iSize, void *pbuf )
 {
+	int fOnTarget = FALSE;
+
 	BufferReader reader( pszName, pbuf, iSize );
 
 	int iState = reader.ReadByte();
 	int iId = reader.ReadChar();
 	int iClip = reader.ReadChar();
+
+	// detect if we're also on target
+	if( iState > 1 )
+	{
+		fOnTarget = TRUE;
+	}
 
 	if ( iId < 1 )
 	{
@@ -620,6 +629,23 @@ int CHudAmmo::MsgFunc_CurWeapon(const char *pszName, int iSize, void *pbuf )
 
 	m_pWeapon = pWeapon;
 
+	if( gHUD.m_iFOV >= 90 )
+	{ // normal crosshairs
+		if( fOnTarget && m_pWeapon->hAutoaim )
+			SetCrosshair( m_pWeapon->hAutoaim, m_pWeapon->rcAutoaim, 255, 255, 255 );
+		else
+			SetCrosshair( m_pWeapon->hCrosshair, m_pWeapon->rcCrosshair, 255, 255, 255 );
+
+		HideCrosshair(); // hide static
+	}
+	else
+	{ // zoomed crosshairs
+		if( fOnTarget && m_pWeapon->hZoomedAutoaim )
+			SetCrosshair( m_pWeapon->hZoomedAutoaim, m_pWeapon->rcZoomedAutoaim, 255, 255, 255 );
+		else
+			SetCrosshair( m_pWeapon->hZoomedCrosshair, m_pWeapon->rcZoomedCrosshair, 255, 255, 255 );
+	}
+
 	m_fFade = 200.0f; //!!!
 
 	return 1;
@@ -631,13 +657,13 @@ int CHudAmmo::MsgFunc_CurWeapon(const char *pszName, int iSize, void *pbuf )
 int CHudAmmo::MsgFunc_WeaponList(const char *pszName, int iSize, void *pbuf )
 {
 	BufferReader reader( pszName, pbuf, iSize );
-	
-	WEAPON Weapon;
+
+	WEAPON Weapon = { 0 };
 
 	strncpy( Weapon.szName, reader.ReadString(), MAX_WEAPON_NAME );
 	Weapon.szName[MAX_WEAPON_NAME-1] = 0;
 	Weapon.iAmmoType = (int)reader.ReadChar();
-	
+
 	Weapon.iMax1 = reader.ReadByte();
 	if (Weapon.iMax1 == 255)
 		Weapon.iMax1 = -1;
@@ -652,6 +678,21 @@ int CHudAmmo::MsgFunc_WeaponList(const char *pszName, int iSize, void *pbuf )
 	Weapon.iId = reader.ReadChar();
 	Weapon.iFlags = reader.ReadByte();
 	Weapon.iClip = 0;
+
+	if( Weapon.iId < 0 || Weapon.iId >= MAX_WEAPONS )
+		return 0;
+	if( Weapon.iSlot < 0 || Weapon.iSlot >= MAX_WEAPON_SLOTS + 1 )
+		return 0;
+	if( Weapon.iSlotPos < 0 || Weapon.iSlotPos >= MAX_WEAPON_POSITIONS + 1 )
+		return 0;
+	if( Weapon.iAmmoType < -1 || Weapon.iAmmoType >= MAX_AMMO_TYPES )
+		return 0;
+	if( Weapon.iAmmo2Type < -1 || Weapon.iAmmo2Type >= MAX_AMMO_TYPES )
+		return 0;
+	if( Weapon.iAmmoType >= 0 && Weapon.iMax1 == 0 )
+		return 0;
+	if( Weapon.iAmmo2Type >= 0 && Weapon.iMax2 == 0 )
+		return 0;
 
 	gWR.AddWeapon( &Weapon );
 
@@ -947,7 +988,6 @@ void CHudAmmo::UserCmd_Autobuy()
 	char *pfile = afile;
 	char token[1024];
 	char szCmd[1024];
-	int remaining = 1023;
 
 	if( !pfile )
 	{
@@ -955,16 +995,12 @@ void CHudAmmo::UserCmd_Autobuy()
 		return;
 	}
 
-	strcpy(szCmd, "cl_setautobuy");
-	remaining -= sizeof( "cl_setautobuy" );
+	strlcpy( szCmd, "cl_setautobuy", sizeof( szCmd ) );
 
 	while((pfile = gEngfuncs.COM_ParseFile( pfile, token )))
 	{
-		// append space first
-		strncat(szCmd, " ", remaining);
-		strncat(szCmd, token, remaining - 1);
-
-		remaining -= strlen( token ) - 1;
+		strlcat( szCmd, " ", sizeof( szCmd ) );
+		strlcat( szCmd, token, sizeof( szCmd ) );
 	}
 
 	gEngfuncs.pfnServerCmd( szCmd );
@@ -977,8 +1013,7 @@ void CHudAmmo::UserCmd_Rebuy()
 	char *pfile = afile;
 	char token[1024];
 	char szCmd[1024];
-	int lastCh;
-	int remaining = 1023;
+	size_t lastCh;
 
 	if( !pfile )
 	{
@@ -986,22 +1021,19 @@ void CHudAmmo::UserCmd_Rebuy()
 		return;
 	}
 
-	// start with \"
-	strcpy(szCmd, "cl_setrebuy \"" );
-	remaining -= sizeof( "cl_setrebuy \"" );
+	strlcpy( szCmd, "cl_setrebuy \"", sizeof( szCmd ) );
 
 	while((pfile = gEngfuncs.COM_ParseFile( pfile, token )))
 	{
-		strncat(szCmd, token, remaining );
-		remaining -= strlen( token );
-
-		// append space after token
-		strncat(szCmd, " ", remaining );
-		remaining--;
+		strlcat( szCmd, token, sizeof( szCmd ) );
+		strlcat( szCmd, " ", sizeof( szCmd ) );
 	}
 	// replace last space with ", before terminator
-	lastCh = strlen(szCmd);
-	szCmd[lastCh] = '\"';
+	lastCh = strlen( szCmd );
+	if( lastCh > 0 && lastCh < sizeof( szCmd ) - 1 )
+	{
+		szCmd[lastCh - 1] = '\"';
+	}
 
 	gEngfuncs.pfnServerCmd( szCmd );
 	gEngfuncs.COM_FreeFile( afile );
@@ -1017,16 +1049,14 @@ int CHudAmmo::Draw(float flTime)
 	int a, x, y, r, g, b;
 	int AmmoWidth;
 
-	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT)) ))
-		return 1;
-
 	// place it here, so pretty dynamic crosshair will work even in spectator!
 	if( gHUD.m_iFOV > 40 )
 	{
-		HideCrosshair(); // hide static
-
 		// draw a dynamic crosshair
-		DrawCrosshair();
+		if( !( gHUD.m_iHideHUDDisplay & HIDEHUD_CROSSHAIR ) )
+			DrawCrosshair();
+
+		DrawSpriteCrosshair();
 	}
 	else
 	{
@@ -1038,7 +1068,10 @@ int CHudAmmo::Draw(float flTime)
 		}
 	}
 
-	if ( (gHUD.m_iHideHUDDisplay & ( HIDEHUD_WEAPONS | HIDEHUD_ALL )) )
+	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT)) ))
+		return 1;
+
+	if( gHUD.m_iHideHUDDisplay & ( HIDEHUD_WEAPONS | HIDEHUD_ALL ) )
 		return 1;
 
 	// Draw Weapon Menu
@@ -1140,6 +1173,9 @@ void CHudAmmo::DrawSpriteCrosshair()
 {
 	int x, y;
 
+	if( g_iUser1 && g_iUser1 != OBS_IN_EYE )
+		return;
+
 	if( !m_hStaticSpr )
 		return;
 
@@ -1159,14 +1195,6 @@ void CHudAmmo::DrawSpriteCrosshair()
 #define NORTH_YPOS (ScreenHeight / 2 - flCrosshairDistance - iLength + 1)
 #define SOUTH_YPOS (ScreenHeight / 2 + flCrosshairDistance)
 #define NORTH_SOUTH_XPOS (ScreenWidth / 2)
-
-#define WEST_XPOS_R (TrueWidth / 2 - flCrosshairDistance - iLength + 1)
-#define EAST_XPOS_R (flCrosshairDistance + TrueWidth / 2)
-#define EAST_WEST_YPOS_R (TrueHeight / 2)
-
-#define NORTH_YPOS_R (TrueHeight / 2 - flCrosshairDistance - iLength + 1)
-#define SOUTH_YPOS_R (TrueHeight / 2 + flCrosshairDistance)
-#define NORTH_SOUTH_XPOS_R (TrueWidth / 2)
 
 int Distances[30][2] =
 {
@@ -1569,6 +1597,9 @@ void CHudAmmo::DrawCrosshair( int weaponId )
 
 void CHudAmmo::DrawCrosshair()
 {
+	if( g_iUser1 && g_iUser1 != OBS_IN_EYE )
+		return;
+
 	int flags, iDeltaDistance, iDistance, iLength, weaponid;
 	float flCrosshairDistance;
 

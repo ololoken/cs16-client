@@ -32,10 +32,11 @@ typedef unsigned short word;
 typedef float vec_t;
 typedef int (*pfnUserMsgHook)(const char *pszName, int iSize, void *pbuf);
 
-#define MIN_XASH_VERSION 3137
+#define MIN_XASH_VERSION 4190
 
 #include <stdint.h>
 
+#include "cl_dll/IGameMenuExports.h"
 #include "util_vector.h"
 
 #include "../engine/cdll_int.h"
@@ -99,6 +100,7 @@ void       DLLEXPORT IN_ClientLookEvent( float relyaw, float relpitch );
 extern cl_enginefunc_t gEngfuncs;
 extern render_api_t gRenderAPI;
 extern mobile_engfuncs_t gMobileAPI;
+extern IGameMenuExports *g_pMenu;
 extern int g_iXash; // indicates buildnum
 extern int g_iMobileAPIVersion; // indicates version. 0 if no mobile API
 #endif // CL_DLL_H

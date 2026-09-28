@@ -260,7 +260,7 @@ void EV_HLDM_GunshotDecalTrace( pmtrace_t *pTrace, char *decalName, char chTextu
 		}
 		else
 		{
-			switch( iRand % 7)
+			switch( iRand % 6)
 			{
 			case 0:	gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric1.wav", 1.0, ATTN_NORM, 0, PITCH_NORM ); break;
 			case 1:	gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric2.wav", 1.0, ATTN_NORM, 0, PITCH_NORM ); break;
@@ -268,7 +268,6 @@ void EV_HLDM_GunshotDecalTrace( pmtrace_t *pTrace, char *decalName, char chTextu
 			case 3:	gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric4.wav", 1.0, ATTN_NORM, 0, PITCH_NORM ); break;
 			case 4:	gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric5.wav", 1.0, ATTN_NORM, 0, PITCH_NORM ); break;
 			case 5: gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric_conc-1.wav", 1.0f, ATTN_NORM, 0, PITCH_NORM); break;
-			case 6: gEngfuncs.pEventAPI->EV_PlaySound( -1, pTrace->endpos, 0, "weapons/ric_conc-2.wav", 1.0f, ATTN_NORM, 0, PITCH_NORM); break;
 			}
 		}
 
@@ -705,7 +704,7 @@ void EV_HLDM_FireBullets(int idx,
 
 void EV_CS16Client_KillEveryRound( TEMPENTITY *te, float frametime, float current_time )
 {
-	if( !g_flRoundTime && current_time > g_flRoundTime )
+	if( g_flRoundTime > 0.0f && te->entity.curstate.fuser4 < g_flRoundTime )
 	{
 		// Mark it die on next TempEntUpdate
 		te->die = 0.0f;

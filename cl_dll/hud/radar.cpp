@@ -208,6 +208,10 @@ int CHudRadar::MsgFunc_Radar(const char *pszName,  int iSize, void *pbuf )
 	BufferReader reader( pszName, pbuf, iSize );
 
 	int index = reader.ReadByte();
+
+	if( index < 1 || index > MAX_PLAYERS )
+		return 1;
+
 	g_PlayerExtraInfo[index].origin.x = reader.ReadCoord();
 	g_PlayerExtraInfo[index].origin.y = reader.ReadCoord();
 	g_PlayerExtraInfo[index].origin.z = reader.ReadCoord();
@@ -357,7 +361,7 @@ int CHudRadar::Draw(float flTime)
 	else if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_CT )
 	{
 		// draw hostages for CT
-		for( int i = 0; i < MAX_HOSTAGES; i++ )
+		for( int i = 1; i <= MAX_HOSTAGES; i++ )
 		{
 			if( !HostageFlashTime( flTime, g_HostageInfo + i ) )
 			{
@@ -376,8 +380,7 @@ int CHudRadar::Draw(float flTime)
 		}
 	}
 
-	if( gHUD.GetGameType() == GAME_CZERO )
-		DrawPlayerLocation( ( m_hRadarOpaque.rect.Height() ) + 10 );
+	DrawPlayerLocation( ( m_hRadarOpaque.rect.Height() ) + 10 );
 
 	return 0;
 }
@@ -390,12 +393,17 @@ void CHudRadar::DrawPlayerLocation( int y )
 		// Localize the location string
 		const char *szLocalizedLocation = Localize( szLocation );
 
+		// don't draw unlocalized location
+		if( szLocalizedLocation[0] == '#' )
+			return;
+
 		int x = (m_hRadarOpaque.rect.Width()) / 2;
 		int len = DrawUtils::ConsoleStringLen( szLocalizedLocation );
 
 		x = x - len / 2;
 		if( x < 0 ) x = 0;
 
+		DrawUtils::SetConsoleTextColor( g_ColorGreen[0], g_ColorGreen[1], g_ColorGreen[2] );
 		DrawUtils::DrawConsoleString( x, y, szLocalizedLocation );
 	}
 }
@@ -541,7 +549,7 @@ int CHudRadar::MsgFunc_HostagePos(const char *pszName, int iSize, void *pbuf)
 	BufferReader reader( pszName, pbuf, iSize );
 	int Flag = reader.ReadByte();
 	int idx = reader.ReadByte();
-	if( idx <= MAX_HOSTAGES )
+	if( idx >= 1 && idx <= MAX_HOSTAGES )
 	{
 		g_HostageInfo[idx].origin.x = reader.ReadCoord();
 		g_HostageInfo[idx].origin.y = reader.ReadCoord();
@@ -563,7 +571,7 @@ int CHudRadar::MsgFunc_HostageK(const char *pszName, int iSize, void *pbuf)
 {
 	BufferReader reader( pszName, pbuf, iSize );
 	int idx = reader.ReadByte();
-	if ( idx <= MAX_HOSTAGES )
+	if ( idx >= 1 && idx <= MAX_HOSTAGES )
 	{
 		g_HostageInfo[idx].dead = true;
 		g_HostageInfo[idx].radarflashtime = gHUD.m_flTime;
@@ -576,13 +584,10 @@ int CHudRadar::MsgFunc_HostageK(const char *pszName, int iSize, void *pbuf)
 
 int CHudRadar::MsgFunc_Location(const char *pszName, int iSize, void *pbuf)
 {
-	if ( gHUD.GetGameType() != GAME_CZERO )
-		return 0;
-
 	BufferReader reader( pszName, pbuf, iSize );
 
 	int player = reader.ReadByte();
-	if( player <= MAX_PLAYERS )
+	if( player >= 1 && player <= MAX_PLAYERS )
 	{
 		const char *location = reader.ReadString();
 

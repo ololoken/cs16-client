@@ -26,6 +26,7 @@
 #include "cl_util.h"
 #include "parsemsg.h"
 #include <string.h>
+#include "strl.h"
 #include "eventscripts.h"
 
 #include "draw_util.h"
@@ -55,14 +56,6 @@ int giDmgFlags[NUM_DMG_TYPES] =
 	DMG_HALLUC
 };
 
-enum
-{
-	ATK_FRONT = 0,
-	ATK_RIGHT,
-	ATK_REAR,
-	ATK_LEFT
-};
-
 int CHudHealth::Init(void)
 {
 	HOOK_MESSAGE(gHUD.m_Health, Health);
@@ -79,7 +72,7 @@ int CHudHealth::Init(void)
 	giDmgHeight = 0;
 	giDmgWidth = 0;
 
-	for( int i = 0; i < 4; i++ )
+	for( int i = 0; i < ATK_COUNT; i++ )
 		m_fAttack[i] = 0;
 
 	memset(m_dmg, 0, sizeof(DAMAGE_IMAGE) * NUM_DMG_TYPES);
@@ -92,7 +85,7 @@ int CHudHealth::Init(void)
 void CHudHealth::Reset( void )
 {
 	// make sure the pain compass is cleared when the player respawns
-	for( int i = 0; i < 4; i++ )
+	for( int i = 0; i < ATK_COUNT; i++ )
 		m_fAttack[i] = 0;
 
 
@@ -185,12 +178,17 @@ int CHudHealth:: MsgFunc_ScoreAttrib(const char *pszName,  int iSize, void *pbuf
 
 	int index = reader.ReadByte();
 	unsigned char flags = reader.ReadByte();
+
+	if( index < 1 || index > MAX_PLAYERS )
+		return 1;
+
 	g_PlayerExtraInfo[index].dead   = !!(flags & PLAYER_DEAD);
 	g_PlayerExtraInfo[index].has_c4 = !!(flags & PLAYER_HAS_C4);
 	g_PlayerExtraInfo[index].vip    = !!(flags & PLAYER_VIP);
 	g_PlayerExtraInfo[index].has_defuse_kit = !!(flags & PLAYER_HAS_DEFUSER);
 	return 1;
 }
+
 // Returns back a color from the
 // Green <-> Yellow <-> Red ramp
 void CHudHealth::GetPainColor( int &r, int &g, int &b, int &a )
@@ -283,7 +281,12 @@ void CHudHealth::DrawHealthBar( float flTime )
 
 		x = CrossWidth + HealthWidth / 2;
 
-		x = DrawUtils::DrawHudNumber(x, y, DHN_3DIGITS | DHN_DRAWZERO, m_iHealth, r, g, b);
+		int idx = gEngfuncs.GetLocalPlayer()->index;
+
+		if( idx >= 1 && idx <= MAX_PLAYERS && g_PlayerExtraInfo[idx].sb_health > 255 )
+			x = DrawUtils::DrawHudNumber2( x, y, g_PlayerExtraInfo[idx].sb_health, r, g, b );
+		else
+			x = DrawUtils::DrawHudNumber( x, y, DHN_3DIGITS | DHN_DRAWZERO, m_iHealth, r, g, b );
 	}
 }
 
@@ -294,7 +297,7 @@ void CHudHealth::CalcDamageDirection( Vector vecFrom )
 
 	if( vecFrom.IsNull() )
 	{
-		for( int i = 0; i < 4; i++ )
+		for( int i = 0; i < ATK_COUNT; i++ )
 			m_fAttack[i] = 0;
 		return;
 	}
@@ -304,38 +307,38 @@ void CHudHealth::CalcDamageDirection( Vector vecFrom )
 	vecFrom = vecFrom.Normalize();
 	AngleVectors (gHUD.m_vecAngles, forward, right, up);
 
-	front = DotProduct (vecFrom, right);
-	side = DotProduct (vecFrom, forward);
+	front = DotProduct (vecFrom, forward);
+	side = DotProduct (vecFrom, right);
 
 	if (flDistToTarget <= 50)
 	{
-		for( int i = 0; i < 4; i++ )
+		for( int i = 0; i < ATK_COUNT; i++ )
 			m_fAttack[i] = 1;
 	}
 	else
 	{
-		if (side > EPSILON)
-			m_fAttack[0] = max(m_fAttack[0], side);
-		if (side < -EPSILON)
-			m_fAttack[1] = max(m_fAttack[1], 0 - side );
 		if (front > EPSILON)
-			m_fAttack[2] = max(m_fAttack[2], front);
+			m_fAttack[ATK_FRONT] = max(m_fAttack[ATK_FRONT], front);
 		if (front < -EPSILON)
-			m_fAttack[3] = max(m_fAttack[3], 0 - front );
+			m_fAttack[ATK_REAR] = max(m_fAttack[ATK_REAR], 0 - front );
+		if (side > EPSILON)
+			m_fAttack[ATK_RIGHT] = max(m_fAttack[ATK_RIGHT], side);
+		if (side < -EPSILON)
+			m_fAttack[ATK_LEFT] = max(m_fAttack[ATK_LEFT], 0 - side );
 	}
 }
 
 void CHudHealth::DrawPain(float flTime)
 {
-	if (m_fAttack[0] == 0 &&
-		m_fAttack[1] == 0 &&
-		m_fAttack[2] == 0 &&
-		m_fAttack[3] == 0)
+	if (m_fAttack[ATK_FRONT] == 0 &&
+		m_fAttack[ATK_REAR] == 0 &&
+		m_fAttack[ATK_RIGHT] == 0 &&
+		m_fAttack[ATK_LEFT] == 0)
 		return;
 
 	float a, fFade = gHUD.m_flTimeDelta * 2;
 
-	for( int i = 0; i < 4; i++ )
+	for( int i = 0; i < ATK_COUNT; i++ )
 	{
 		if( m_fAttack[i] > EPSILON )
 		{
@@ -483,7 +486,7 @@ int CHudHealth :: MsgFunc_ClCorpse(const char *pszName, int iSize, void *pbuf)
 		if( !strstr(pModel, "models/") )
 			snprintf( szModel, sizeof(szModel), "models/player/%s/%s.mdl", pModel, pModel );
 		else
-			strncpy( szModel, pModel, sizeof( szModel ));
+			strlcpy( szModel, pModel, sizeof( szModel ) );
 	}
 	else
 	{
@@ -504,7 +507,7 @@ int CHudHealth :: MsgFunc_ClCorpse(const char *pszName, int iSize, void *pbuf)
 		}
 		else modelidx = PLAYERMODEL_PLAYER;
 
-		strncpy( szModel, sPlayerModelFiles[modelidx], sizeof( szModel ) );
+		strlcpy( szModel, sPlayerModelFiles[modelidx], sizeof( szModel ) );
 	}
 	CreateCorpse( origin, angles, szModel, delay, seq, classID );
 	return 0;
@@ -531,7 +534,7 @@ int CHudHealth::MsgFunc_HealthInfo( const char *pszName, int iSize, void *buf )
 	int idx = reader.ReadByte();
 	int health = reader.ReadLong();
 
-	if ( idx < MAX_PLAYERS )
+	if ( idx >= 1 && idx <= MAX_PLAYERS )
 		g_PlayerExtraInfo[idx].sb_health = health;
 
 	return 1;
@@ -544,7 +547,7 @@ int CHudHealth::MsgFunc_Account( const char *pszName, int iSize, void *buf )
 	int idx = reader.ReadByte();
 	int account = reader.ReadLong();
 
-	if ( idx < MAX_PLAYERS )
+	if ( idx >= 1 && idx <= MAX_PLAYERS )
 		g_PlayerExtraInfo[idx].sb_account = account;
 
 	return 1;

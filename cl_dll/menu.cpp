@@ -1,9 +1,9 @@
 /***
 *
 *	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*	
-*	This product contains software technology licensed from Id 
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
+*
+*	This product contains software technology licensed from Id
+*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc.
 *	All Rights Reserved.
 *
 *   Use, distribution, and modification of this source code and/or resulting
@@ -20,10 +20,12 @@
 #include "hud.h"
 #include "cl_util.h"
 #include "parsemsg.h"
+#include "com_weapons.h"
 
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "strl.h"
 
 //#include "vgui_TeamFortressViewport.h"
 
@@ -121,7 +123,7 @@ int CHudMenu :: Draw( float flTime )
 		if ( g_szMenuString[i] == '\n' )
 			i++;
 	}
-	
+
 	return 1;
 }
 
@@ -196,23 +198,20 @@ int CHudMenu :: MsgFunc_ShowMenu( const char *pszName, int iSize, void *pbuf )
 
 	if ( !m_fWaitingForMore ) // this is the start of a new menu
 	{
-		strncpy( g_szPrelocalisedMenuString, menustring, MAX_MENU_STRING - 1 );
+		strlcpy( g_szPrelocalisedMenuString, menustring, sizeof( g_szPrelocalisedMenuString ) );
 	}
 	else
 	{  // append to the current menu string
-		strncat( g_szPrelocalisedMenuString, menustring, MAX_MENU_STRING - strlen(g_szPrelocalisedMenuString) - 1 );
+		strlcat( g_szPrelocalisedMenuString, menustring, sizeof( g_szPrelocalisedMenuString ) );
 	}
-	g_szPrelocalisedMenuString[MAX_MENU_STRING-1] = 0;  // ensure null termination (strncat/strncpy does not)
 
 	if ( !NeedMore )
 	{  // we have the whole string, so we can localise it now
-		strncpy( g_szMenuString, gHUD.m_TextMessage.BufferedLocaliseTextString( g_szPrelocalisedMenuString ), MAX_MENU_STRING );
-		g_szMenuString[MAX_MENU_STRING-1] = 0;
+		strlcpy( g_szMenuString, gHUD.m_TextMessage.BufferedLocaliseTextString( g_szPrelocalisedMenuString ), sizeof( g_szMenuString ) );
 		// Swap in characters
 		if ( KB_ConvertString( g_szMenuString, &temp ) )
 		{
-			strncpy( g_szMenuString, temp, MAX_MENU_STRING );
-			g_szMenuString[MAX_MENU_STRING-1] = 0;
+			strlcpy( g_szMenuString, temp, sizeof( g_szMenuString ) );
 			free( temp );
 		}
 	}
@@ -240,6 +239,9 @@ int CHudMenu::MsgFunc_BuyClose(const char *pszName, int iSize, void *pbuf)
 {
 	Touch_CloseMenu();
 
+	if (g_pMenu)
+		g_pMenu->HideVGUIMenu();
+
 	return 1;
 }
 
@@ -255,8 +257,7 @@ int CHudMenu::MsgFunc_AllowSpec(const char *pszName, int iSize, void *pbuf)
 void CHudMenu::UserCmd_OldStyleMenuOpen()
 {
 	m_flShutoffTime = -1; // stay open until user will not close it
-	strncpy( g_szMenuString, gHUD.m_TextMessage.BufferedLocaliseTextString("Buy"), MAX_MENU_STRING );
-	g_szMenuString[MAX_MENU_STRING-1] = 0;
+	strlcpy( g_szMenuString, gHUD.m_TextMessage.BufferedLocaliseTextString("Buy"), sizeof( g_szMenuString ) );
 }
 
 void CHudMenu::UserCmd_OldStyleMenuClose()
@@ -272,6 +273,51 @@ void CHudMenu::UserCmd_OldStyleMenuClose()
 
 void CHudMenu::ShowVGUIMenu( int menuType )
 {
+	int team = g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber;
+	int haveCancel = team != TEAM_UNASSIGNED ? 1 : 0;
+
+	if( g_pMenu && !UseOldTouchMenusEnabled() )
+	{
+		switch( menuType )
+		{
+		case MENU_TEAM:
+		{
+			int param = 0;
+			if( m_bAllowSpec )
+			{
+				if( g_iTeamNumber == TEAM_UNASSIGNED ||
+					g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].dead ||
+					!g_iFreezeTimeOver )
+				{
+					param |= 1 << 0;
+				}
+			}
+
+			if( IsASMapType() && g_iTeamNumber == TEAM_CT )
+				param |= 1 << 1;
+
+			if( haveCancel )
+				param |= 1 << 2;
+
+			g_pMenu->ShowVGUIMenu( menuType, param, 0 );
+			return;
+		}
+		case MENU_CLASS_T:
+		case MENU_CLASS_CT:
+			g_pMenu->ShowVGUIMenu( menuType, gHUD.GetGameType() == GAME_CZERO, haveCancel );
+			return;
+		case MENU_BUY:
+		case MENU_BUY_PISTOL:
+		case MENU_BUY_SHOTGUN:
+		case MENU_BUY_RIFLE:
+		case MENU_BUY_SUBMACHINEGUN:
+		case MENU_BUY_MACHINEGUN:
+		case MENU_BUY_ITEM:
+			g_pMenu->ShowVGUIMenu( menuType, gHUD.GetGameType() == GAME_CZERO, team );
+			return;
+		}
+	}
+
 	const char *szCmd;
 
 	switch(menuType)

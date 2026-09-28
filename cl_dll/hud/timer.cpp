@@ -36,6 +36,7 @@ version.
 #include "vgui_parser.h"
 #include <string.h>
 #include "draw_util.h"
+#include "pm_shared.h"
 
 int CHudTimer::Init()
 {
@@ -55,11 +56,15 @@ int CHudTimer::VidInit()
 
 int CHudTimer::Draw( float fTime )
 {
-	if ( ( gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) )
+	if( gHUD.m_iHideHUDDisplay & ( HIDEHUD_TIMER | HIDEHUD_ALL ) )
 		return 1;
 
 	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT)) ))
 		return 1;
+
+	if( g_iUser1 == OBS_IN_EYE )
+		return 1;
+
 	int r, g, b;
 	// time must be positive
 	int minutes = max( 0, (int)( m_iTime + m_fStartTime - gHUD.m_flTime ) / 60);
@@ -231,8 +236,10 @@ int CHudProgressBar::MsgFunc_BotProgress(const char *pszName, int iSize, void *p
 	int flag = reader.ReadByte();
 	switch( flag )
 	{
-	case UPDATE_BOTPROGRESS:
 	case CREATE_BOTPROGRESS:
+		m_fPercent = 0.0f;
+		break;
+	case UPDATE_BOTPROGRESS:
 		fNewPercent = (float)reader.ReadByte() / 100.0f;
 		// cs behavior:
 		// just don't decrease percent values

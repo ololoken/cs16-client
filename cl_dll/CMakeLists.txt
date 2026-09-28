@@ -13,6 +13,7 @@ file(GLOB CS_INPUT_SRC "input/*.cpp")
 file(GLOB CS_PM_SRC "../pm_shared/*.cpp")
 file(GLOB CS_GAMSH_SRC "../game_shared/*.cpp")
 file(GLOB MINIUTL_SRC "../3rdparty/mainui_cpp/miniutl/*.cpp")
+file(GLOB CS_PARTICLEMAN_SRC "particleman/*.cpp")
 
 list(REMOVE_ITEM CS_CLIENT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/ev_hldm.cpp")
 list(REMOVE_ITEM CS_INPUT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/input/input_sdl.cpp")
@@ -20,6 +21,18 @@ list(REMOVE_ITEM CS_CLIENT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/inputw32.cpp")
 list(REMOVE_ITEM CS_WPN_SRC "${CMAKE_CURRENT_SOURCE_DIR}/cs_wpn/cs_baseentity.cpp")
 list(APPEND CS_CLIENT_SRC ../common/interface.cpp)
 list(APPEND CS_CLIENT_SRC ../public/utflib.cpp)
+
+if(HAVE_STRLCPY)
+	add_definitions(-DHAVE_STRLCPY)
+else()
+	list(APPEND CS_CLIENT_SRC ../public/strlcpy.c)
+endif()
+
+if(HAVE_STRLCAT)
+	add_definitions(-DHAVE_STRLCAT)
+else()
+	list(APPEND CS_CLIENT_SRC ../public/strlcat.c)
+endif()
 
 list(APPEND CS_CLIENT_SRC ${CS_EV_SRC})
 list(APPEND CS_CLIENT_SRC ${CS_WPN_SRC})
@@ -30,6 +43,7 @@ list(APPEND CS_CLIENT_SRC ${CS_PM_SRC})
 list(APPEND CS_CLIENT_SRC ${CS_INPUT_SRC})
 list(APPEND CS_CLIENT_SRC ${CS_GAMSH_SRC})
 list(APPEND CS_CLIENT_SRC ${MINIUTL_SRC})
+list(APPEND CS_CLIENT_SRC ${CS_PARTICLEMAN_SRC})
 
 include_directories(
 	include
@@ -47,7 +61,8 @@ include_directories(
 	../3rdparty/mainui_cpp
 	../3rdparty/mainui_cpp/controls
 	../3rdparty/mainui_cpp/menus
-	../3rdparty/mainui_cpp/miniutl)
+	../3rdparty/mainui_cpp/miniutl
+	particleman)
 
 add_definitions(-DCLIENT_WEAPONS -DCLIENT_DLL -DSTDINT_H=<cstdint>)
 

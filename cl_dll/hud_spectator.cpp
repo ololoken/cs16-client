@@ -8,6 +8,7 @@
 #include "hud.h"
 #include "cl_util.h"
 #include <string.h>
+#include "strl.h"
 #include "cl_entity.h"
 #include "triangleapi.h"
 #include "hltv.h"
@@ -280,8 +281,7 @@ void UTIL_StringToVector( float * pVector, const char *pString )
 	char *pstr, *pfront, tempString[128];
 	int	j;
 
-	strncpy( tempString, pString, sizeof( tempString ) );
-	tempString[ sizeof( tempString ) - 1 ] = '\0';
+	strlcpy( tempString, pString, sizeof( tempString ) );
 	pstr = pfront = tempString;
 	
 	for ( j = 0; j < 3; j++ )
@@ -351,8 +351,7 @@ int UTIL_FindEntityInMap( const char * name, float * origin, float * angle)
 				return 0;
 			}
 			
-			strncpy (keyname, token, sizeof(keyname));
-			keyname[sizeof(keyname)-1]=0;
+			strlcpy( keyname, token, sizeof( keyname ) );
 
 			// another hack to fix keynames with trailing spaces
 			n = strlen(keyname);
@@ -682,8 +681,7 @@ void CHudSpectator::DirectorMessage( int iSize, void *pbuf )
 		msg->holdtime	= reader.ReadFloat();	// holdtime
 		msg->fxtime		= reader.ReadFloat();	// fxtime;
 
-		strncpy( m_HUDMessageText[m_lastHudMessage], reader.ReadString(), 128 );
-		m_HUDMessageText[m_lastHudMessage][127]=0;	// text
+		strlcpy( m_HUDMessageText[m_lastHudMessage], reader.ReadString(), sizeof( m_HUDMessageText[m_lastHudMessage] ) );
 
 		msg->pMessage = m_HUDMessageText[m_lastHudMessage];
 		msg->pName	  = "HUD_MESSAGE";
@@ -1150,9 +1148,8 @@ bool CHudSpectator::ParseOverviewFile( )
 				if ( !stricmp( token, "image" ) )
 				{
 					pfile = gEngfuncs.COM_ParseFile(pfile,token);
-					strncpy(m_OverviewData.layersImages[ m_OverviewData.layers ], token, 255);
-					m_OverviewData.layersImages[ m_OverviewData.layers ][254] = 0;
-					
+					strlcpy( m_OverviewData.layersImages[ m_OverviewData.layers ], token, sizeof( m_OverviewData.layersImages[ m_OverviewData.layers ] ) );
+
 				}
 				else if ( !stricmp( token, "height" ) )
 				{
@@ -1330,6 +1327,7 @@ void CHudSpectator::DrawOverviewLayer()
 				gEngfuncs.pTriAPI->TexCoord2f( 0, 1 );
 				gEngfuncs.pTriAPI->Vertex3f (x, y+yStep, z);
 				gEngfuncs.pTriAPI->End();
+				gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
 
 				frame++;
 				x+= xStep;
@@ -1373,6 +1371,7 @@ void CHudSpectator::DrawOverviewLayer()
 				gEngfuncs.pTriAPI->TexCoord2f( 1, 0 );
 				gEngfuncs.pTriAPI->Vertex3f (x, y+yStep, z);
 				gEngfuncs.pTriAPI->End();
+				gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
 
 				frame++;
 				
@@ -1582,6 +1581,7 @@ void CHudSpectator::DrawOverviewEntities()
 	gEngfuncs.pTriAPI->TexCoord2f( 1, 1 );
 	gEngfuncs.pTriAPI->Vertex3f (x+left[0], y+left[1], (z+left[2]) * zScale);
 	gEngfuncs.pTriAPI->End ();
+	gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
 
 }
 

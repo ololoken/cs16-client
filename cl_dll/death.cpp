@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "strl.h"
 
 float color[3];
 
@@ -172,8 +173,8 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	int headshot = reader.ReadByte();
 
 	char killedwith[32];
-	strncpy( killedwith, "d_", sizeof(killedwith) );
-	strncat( killedwith, reader.ReadString(), sizeof( killedwith ) - 2 );
+	strlcpy( killedwith, "d_", sizeof( killedwith ) );
+	strlcat( killedwith, reader.ReadString(), sizeof( killedwith ) );
 
 	//if (gViewPort)
 	//	gViewPort->DeathMsg( killer, victim );
@@ -197,7 +198,14 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	gHUD.m_Scoreboard.GetAllPlayersInfo();
 
 	// Get the Killer's name
-	const char *killer_name = g_PlayerInfoList[ killer ].name;
+	const char *killer_name = NULL;
+	bool killer_this_player = false;
+	if ( killer >= 1 && killer <= MAX_PLAYERS )
+	{
+		killer_name = g_PlayerInfoList[killer].name;
+		killer_this_player = g_PlayerInfoList[killer].thisplayer;
+	}
+
 	if ( !killer_name )
 	{
 		killer_name = "";
@@ -206,15 +214,15 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	else
 	{
 		rgDeathNoticeList[i].KillerColor = GetClientColor( killer );
-		strncpy( rgDeathNoticeList[i].szKiller, killer_name, MAX_PLAYER_NAME_LENGTH );
-		rgDeathNoticeList[i].szKiller[MAX_PLAYER_NAME_LENGTH-1] = 0;
+		strlcpy( rgDeathNoticeList[i].szKiller, killer_name, sizeof( rgDeathNoticeList[i].szKiller ) );
 	}
 
 	// Get the Victim's name
 	const char *victim_name = NULL;
-	// If victim is -1, the killer killed a specific, non-player object (like a sentrygun)
-	if ( ((char)victim) != -1 )
+
+	if ( victim >= 1 && victim <= MAX_PLAYERS )
 		victim_name = g_PlayerInfoList[ victim ].name;
+
 	if ( !victim_name )
 	{
 		victim_name = "";
@@ -223,17 +231,17 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	else
 	{
 		rgDeathNoticeList[i].VictimColor = GetClientColor( victim );
-		strncpy( rgDeathNoticeList[i].szVictim, victim_name, MAX_PLAYER_NAME_LENGTH );
-		rgDeathNoticeList[i].szVictim[MAX_PLAYER_NAME_LENGTH-1] = 0;
+		strlcpy( rgDeathNoticeList[i].szVictim, victim_name, sizeof( rgDeathNoticeList[i].szVictim ) );
 	}
 
 	// Is it a non-player object kill?
-	if ( ((char)victim) == -1 )
+	// If victim is 255, the killer killed a specific, non-player object (like a sentrygun)
+	if( victim == 255 )
 	{
 		rgDeathNoticeList[i].bNonPlayerKill = true;
 
 		// Store the object's name in the Victim slot (skip the d_ bit)
-		strncpy( rgDeathNoticeList[i].szVictim, killedwith+2, sizeof(killedwith) );
+		strlcpy( rgDeathNoticeList[i].szVictim, killedwith+2, sizeof( rgDeathNoticeList[i].szVictim ) );
 	}
 	else
 	{
@@ -254,7 +262,7 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	rgDeathNoticeList[i].flDisplayTime = gHUD.m_flTime + hud_deathnotice_time->value;
 
 	// Play kill sound
-	if ((g_PlayerInfoList[killer].thisplayer || g_iUser2 == killer) &&
+	if ((killer_this_player || g_iUser2 == killer) &&
 		!rgDeathNoticeList[i].bNonPlayerKill &&
 		!rgDeathNoticeList[i].bSuicide &&
 		cl_killsound->value > 0.0f)
@@ -316,7 +324,4 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 
 	return 1;
 }
-
-
-
 

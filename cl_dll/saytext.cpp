@@ -28,6 +28,8 @@
 #include "vgui_parser.h"
 #include "draw_util.h"
 #include "com_weapons.h"
+#include "utlstring.h"
+#include "strl.h"
 //#include "vgui_TeamFortressViewport.h"
 
 extern float *GetClientColor( int clientIndex );
@@ -38,6 +40,23 @@ extern float *GetClientColor( int clientIndex );
 // allow 20 pixels on either side of the text
 #define MAX_LINE_WIDTH  ( ScreenWidth - 40 )
 #define LINE_START  10
+
+static void StripSayTextControlCodes( const char *src, char *dst, int dstSize )
+{
+	if ( !src || dstSize <= 0 )
+		return;
+
+	int j = 0;
+	for ( const char *p = src; *p && j < dstSize - 1; ++p )
+	{
+		if ( *p == '\x01' || *p == '\x02' || *p == '\x03' || *p == '\x04' )
+			continue;
+
+		dst[j++] = *p;
+	}
+
+	dst[j] = '\0';
+}
 
 static char g_szLineBuffer[ MAX_LINES + 1 ][ MAX_CHARS_PER_LINE ];
 static float *g_pflNameColors[ MAX_LINES + 1 ];
@@ -57,6 +76,7 @@ int CHudSayText :: Init( void )
 
 	m_HUD_saytext =			gEngfuncs.pfnRegisterVariable( "hud_saytext_internal", "1", 0 );
 	m_HUD_saytext_time =	gEngfuncs.pfnRegisterVariable( "hud_saytext_time", "5", 0 );
+	m_HUD_saytext_console =	gEngfuncs.pfnRegisterVariable( "hud_saytext_console", "1", 0 );
 
 	m_iFlags |= HUD_INTERMISSION; // is always drawn during an intermission
 
@@ -198,69 +218,67 @@ struct
 	const char value[64];
 	int numArgs;
 	bool allowDead;
-	bool replaceFirstArgToName;
-	bool swap;
 } sayTextFmt[] =
 {
 	{
 		"#Cstrike_Chat_CT",
-		"\x03(Counter-Terrorist) %s : \x01%s",
-		2, true, true, false
+		"\x03(Counter-Terrorist) %s1 : \x01%s2",
+		2, true
 	},
 	{
 		"#Cstrike_Chat_T",
-		"\x03(Terrorist) %s : \x01%s",
-		2, true, true, false
+		"\x03(Terrorist) %s1 : \x01%s2",
+		2, true
 	},
 	{
 		"#Cstrike_Chat_CT_Dead",
-		"\x03*DEAD*(Counter-Terrorist) %s : \x01%s",
-		2, false, true, false
+		"\x03*DEAD*(Counter-Terrorist) %s1 : \x01%s2",
+		2, false
 	},
 	{
 		"#Cstrike_Chat_T_Dead",
-		"\x03*DEAD*(Terrorist) %s : \x01%s",
-		2, false, true, false
+		"\x03*DEAD*(Terrorist) %s1 : \x01%s2",
+		2, false
 	},
 	{
 		"#Cstrike_Chat_Spec",
-		"\x03(Spectator) %s : \x03%s",
-		2, false, true, false
+		"\x03(Spectator) %s1 : \x03%s2",
+		2, false
 	},
 	{
 		"#Cstrike_Chat_All",
-		"\x03%s : \x01%s",
-		2, true, true, false
+		"\x03%s1 : \x01%s2",
+		2, true
 	},
 	{
 		"#Cstrike_Chat_AllDead",
-		"\x03*DEAD* %s: \x01%s",
-		2, false, true, false
+		"\x03*DEAD* %s1: \x01%s2",
+		2, false
 	},
 	{
 		"#Cstrike_Chat_AllSpec",
-		"\x03*SPEC* %s: \x03%s",
-		2, false, true, false
+		"\x03*SPEC* %s1: \x03%s2",
+		2, false
 	},
 	{
 		"#Cstrike_Name_Change",
-		"\x03* %s changed name to %s",
-		2, true, false, false
+		"\x03* %s1 changed name to %s2",
+		2, true
 	},
 	{
 		"#Cstrike_Chat_T_Loc",
-		"\x03*(Terrorist) %s @ %s : \x01%s",
-		3, true, true, true
+		"\x03*(Terrorist) %s1 @ %s3 : \x01%s2",
+		3, true
 	},
 	{
 		"#Cstrike_Chat_CT_Loc",
-		"\x03*(Counter-Terrorist) %s @ %s : \x01%s",
-		3, true, true, true
+		"\x03*(Counter-Terrorist) %s1 @ %s3 : \x01%s2",
+		3, true
 	},
 	{
 		"#Spec_PlayerItem",
-		"%s",
-		1, true, false, false,
+		"%s1",
+		1, true
 	},
 };
 
@@ -268,29 +286,23 @@ int CHudSayText :: MsgFunc_SayText( const char *pszName, int iSize, void *pbuf )
 {
 	BufferReader reader( pszName, pbuf, iSize );
 	int client_index, argc, numArgs;		// the client who spoke the message
-	char *arg, *fmt, *argv[3] = {};
+	CUtlString fmt;
+	CUtlString argv[3];
 	const char *fmt_tran = nullptr;
-	bool allowDead, replaceFirstArgToName, swap;
-	int len;
+	bool allowDead, replaceFirstArgToName;
 
 	client_index = reader.ReadByte();
 
 	// find all arguments
-	arg = reader.ReadString();
-	len = strlen( arg );
-	fmt = new char[len+1];
-	strcpy(fmt, arg);
+	fmt = reader.ReadString();
 
 	for( argc = 0; argc < 3; argc++ )
 	{
-		arg = reader.ReadString();
+		const char *arg = reader.ReadString();
 		if( !arg[0] && !reader.Valid() )
 			break;
 
-		len = strlen( arg );
-		argv[argc] = new char[len+1];
-		strncpy( argv[argc], arg, len );
-		argv[argc][len] = 0;
+		argv[argc] = arg;
 	}
 
 	// see if argv[0] is translatable
@@ -303,12 +315,6 @@ int CHudSayText :: MsgFunc_SayText( const char *pszName, int iSize, void *pbuf )
 				fmt_tran = (char*)sayTextFmt[i].value;
 				allowDead = sayTextFmt[i].allowDead;
 				numArgs = sayTextFmt[i].numArgs;
-
-				// VALVEWHY: Second argument may be null string, but not on name changing.
-				replaceFirstArgToName = sayTextFmt[i].replaceFirstArgToName;
-
-				// VALVEWHY #2: location is last argument, so swap
-				swap = sayTextFmt[i].swap;
 				break;
 			}
 		}
@@ -317,74 +323,44 @@ int CHudSayText :: MsgFunc_SayText( const char *pszName, int iSize, void *pbuf )
 	// no translations
 	if( !fmt_tran )
 	{
-		fmt_tran = fmt;
+		fmt_tran = fmt.Get();
 		numArgs = argc;
 		allowDead = true;
-		replaceFirstArgToName = false;
-		swap = false;
 	}
 
 	// If text is sent from dead player or spectator
 	// don't draw it, until local player isn't specator or dead.
 	if( !allowDead && !CL_IsDead() && !g_iUser1 )
 	{
-		delete[] fmt;
-
-		for( int i = 0; i < 3; i++ )
-			if( argv[i] ) delete argv[i];
-
 		return 1;
 	}
 
-	if( replaceFirstArgToName )
+	// Resolve missing nickname locally via client_index mapping.
+	if( client_index > 0 && client_index <= MAX_PLAYERS && numArgs > 0 && argv[0].Length() == 0 )
 	{
 		GetPlayerInfo( client_index, &g_PlayerInfoList[client_index] );
-		delete[] argv[0];
-
 		argv[0] = g_PlayerInfoList[client_index].name;
 	}
 
-	char dst[1024];
+	const char *args[3] = { argv[0].Get(), argv[1].Get(), argv[2].Get() };
+	char tmp[1024];
+	Localize_Format( tmp, sizeof( tmp ), fmt_tran, args, numArgs );
 
-	switch( numArgs )
-	{
-	case 3:
-		if( swap )
-			snprintf( dst, sizeof( dst ), fmt_tran, argv[0], argv[2], argv[1] );
-		else
-			snprintf( dst, sizeof( dst ), fmt_tran, argv[0], argv[1], argv[2] );
-		break;
-	case 2:
-		snprintf( dst, sizeof( dst ), fmt_tran, argv[0], argv[1] );
-		break;
-	case 1:
-		snprintf( dst, sizeof( dst ), fmt_tran, argv[0] );
-		break;
-	case 0:
-		strncpy( dst, fmt_tran, sizeof( dst ) );
-		dst[sizeof(dst)-1] = 0;
-		break;
-	}
-	
-	SayTextPrint( dst, strlen(dst), client_index );
-
-	delete[] fmt;
-
-	for( int i = 0; i < argc; i++ )
-	{
-		// skip second argument if it was replaced by name
-		if( i == 0 && replaceFirstArgToName )
-			continue;
-
-		if( argv[i] )
-			delete[] argv[i];
-	}
+	SayTextPrint( tmp, strlen( tmp ), client_index );
 
 	return 1;
 }
 
 void CHudSayText :: SayTextPrint( const char *pszBuf, int iBufSize, int clientIndex )
 {
+	if ( m_HUD_saytext_console->value && pszBuf && *pszBuf )
+	{
+		// Print it straight to the console
+		char szConsoleText[ MAX_CHARS_PER_LINE ];
+		StripSayTextControlCodes( pszBuf, szConsoleText, sizeof( szConsoleText ) );
+		ConsolePrint( szConsoleText );
+	}
+
 	// find an empty string slot
 	int i;
 	for ( i = 0; i < MAX_LINES; i++ )
@@ -404,7 +380,7 @@ void CHudSayText :: SayTextPrint( const char *pszBuf, int iBufSize, int clientIn
 
 #if 1
 	// if it's a say message, search for the players name in the string
-	if ( clientIndex > 0 )
+	if ( clientIndex > 0 && clientIndex <= MAX_PLAYERS )
 	{
 		GetPlayerInfo( clientIndex, &g_PlayerInfoList[clientIndex] );
 		const char *pName = g_PlayerInfoList[clientIndex].name;
@@ -423,7 +399,7 @@ void CHudSayText :: SayTextPrint( const char *pszBuf, int iBufSize, int clientIn
 #endif
 
 
-	strncpy( g_szLineBuffer[i], pszBuf, max(iBufSize -1, MAX_CHARS_PER_LINE-1) );
+	strlcpy( g_szLineBuffer[i], pszBuf, sizeof( g_szLineBuffer[i] ) );
 
 	// make sure the text fits in one line
 	EnsureTextFitsInOneLineAndWrapIfHaveTo( i );
@@ -516,19 +492,12 @@ void CHudSayText :: EnsureTextFitsInOneLineAndWrapIfHaveTo( int line )
 				// copy remaining string into next buffer,  making sure it starts with a space character
 				if ( (char)*last_break == (char)' ' )
 				{
-					int linelen = strlen(g_szLineBuffer[j]);
-					int remaininglen = strlen(last_break);
-
-					if ( (linelen - remaininglen) <= MAX_CHARS_PER_LINE )
-						strcat( g_szLineBuffer[j], last_break );
+					strlcat( g_szLineBuffer[j], last_break, sizeof( g_szLineBuffer[j] ) );
 				}
 				else
 				{
-					if ( (strlen(g_szLineBuffer[j]) - strlen(last_break) - 2) < MAX_CHARS_PER_LINE )
-					{
-						strcat( g_szLineBuffer[j], " " );
-						strcat( g_szLineBuffer[j], last_break );
-					}
+					strlcat( g_szLineBuffer[j], " ", sizeof( g_szLineBuffer[j] ) );
+					strlcat( g_szLineBuffer[j], last_break, sizeof( g_szLineBuffer[j] ) );
 				}
 
 				*last_break = 0; // cut off the last string

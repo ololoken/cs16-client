@@ -129,11 +129,11 @@ void AlertMessage( ALERT_TYPE atype, const char *szFmt, ... )
 	static char	string[1024];
 
 	va_start (argptr, szFmt);
-	vsprintf (string, szFmt,argptr);
+	vsnprintf( string, sizeof( string ), szFmt, argptr );
 	va_end (argptr);
 
 	gEngfuncs.Con_Printf( "cl:  " );
-	gEngfuncs.Con_Printf( string );
+	gEngfuncs.Con_Printf( "%s", string );
 }
 
 /*
@@ -1187,7 +1187,7 @@ void HUD_WeaponsPostThink( local_state_s *from, local_state_s *to, usercmd_t *cm
 		pCurrent->m_iShotsFired			= pfrom->m_fInZoom;
 	}
 
-	if( from->client.vuser4.x < 0 || from->client.vuser4.x > MAX_AMMO_TYPES )
+	if( from->client.vuser4.x < 0 || from->client.vuser4.x >= MAX_AMMO_TYPES )
 		pWeapon->m_iPrimaryAmmoType = 0;
 	else
 	{

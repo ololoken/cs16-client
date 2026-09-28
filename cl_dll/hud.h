@@ -36,6 +36,7 @@
 
 #include "csprite.h"
 #include "cvardef.h"
+#include "utlstring.h"
 
 #define MIN_ALPHA	 100	
 #define	HUDELEM_ACTIVE	1
@@ -83,6 +84,18 @@ inline bool BIsValidCTModelIndex( int i )
 		return false;
 }
 
+inline bool IsASMapType()
+{
+	const char *a = gEngfuncs.pfnGetLevelName();
+	return a && (!strnicmp( a, "maps/as_", 8 ) || !strnicmp( a, "as_", 3 ));
+}
+
+inline bool IsDEMapType()
+{
+	const char *a = gEngfuncs.pfnGetLevelName();
+	return a && (!strnicmp( a, "maps/de_", 8 ) || !strnicmp( a, "de_", 3 ));
+}
+
 #define HUD_DRAW         (1 << 0)
 #define HUD_THINK        (1 << 1)
 #define HUD_ACTIVE       (HUD_DRAW | HUD_THINK)
@@ -90,7 +103,6 @@ inline bool BIsValidCTModelIndex( int i )
 
 #define MAX_PLAYER_NAME_LENGTH		32
 
-#define	MAX_MOTD_LENGTH				1536
 
 extern cvar_t *cl_fog_r;
 extern cvar_t *cl_fog_g;
@@ -338,7 +350,7 @@ public:
 
 protected:
 	static int MOTD_DISPLAY_TIME;
-	char m_szMOTD[ MAX_MOTD_LENGTH ];
+	CUtlString m_szMOTD;
 	
 	int m_iLines;
 	int m_iMaxLength;
@@ -559,6 +571,7 @@ private:
 
 	struct cvar_s *	m_HUD_saytext;
 	struct cvar_s *	m_HUD_saytext_time;
+	struct cvar_s *	m_HUD_saytext_console;
 };
 
 //
@@ -955,6 +968,7 @@ public:
 	void Init( void );
 	void VidInit( void );
 	void Think( void );
+	void Reset( void );
 	void Shutdown( void );
 	int Redraw( float flTime, int intermission );
 	int UpdateClientData( client_data_t *cdata, float time );

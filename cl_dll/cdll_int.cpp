@@ -19,17 +19,23 @@
 //
 
 #include "hud.h"
-#include "cl_util.h"
 #include "netadr.h"
 #include "pmtrace.h"
 
 #include "pm_shared.h"
 
 #include <string.h>
-#include "interface.h" // not used here
+#include "interface.h"
 #include "render_api.h"
 #include "mobility_int.h"
 #include "vgui_parser.h"
+#include "cl_dll/IGameMenuExports.h"
+#include "particleman.h"
+#include "IParticleMan_Active.h"
+#include "CMiniMem.h"
+#include "environment.h"
+
+#include "cl_util.h"
 
 cl_enginefunc_t		gEngfuncs  = { };
 render_api_t		gRenderAPI = { };
@@ -38,10 +44,51 @@ CHud gHUD;
 int g_iXash = 0; // indicates a buildnum
 int g_iMobileAPIVersion = 0;
 
+IGameMenuExports *g_pMenu = nullptr;
+IParticleMan *g_pParticleMan = NULL;
+
+static IGameMenuExports *GetNativeMenuExports( void )
+{
+	if( !g_iMobileAPIVersion || !gMobileAPI.pfnGetNativeObject )
+		return nullptr;
+
+	void *nativeFactory = gMobileAPI.pfnGetNativeObject( "MenuFactory" );
+	if( !nativeFactory )
+		return nullptr;
+
+	CreateInterfaceFn menuFactory = reinterpret_cast<CreateInterfaceFn>( nativeFactory );
+	return static_cast<IGameMenuExports *>( menuFactory( GAMEMENUEXPORTS_INTERFACE_VERSION, NULL ) );
+}
+
+static bool HUD_MessageBox( const char *msg )
+{
+	gEngfuncs.Con_Printf( "%s", msg );
+
+	if( g_iMobileAPIVersion && gMobileAPI.pfnSys_Warn )
+	{
+		gMobileAPI.pfnSys_Warn( "%s", msg );
+		return true;
+	}
+
+	return false;
+}
+
+static void LoadMenuInterface( void )
+{
+	if( g_pMenu )
+		return;
+
+	g_pMenu = GetNativeMenuExports();
+	if( !g_pMenu )
+		HUD_MessageBox( "Error: native object \"MenuFactory\" is unavailable\n" );
+}
+
 void InitInput (void);
 void Game_HookEvents( void );
 void IN_Commands( void );
 void Input_Shutdown (void);
+void CL_LoadParticleMan();
+void CL_UnloadParticleMan();
 
 /*
 ========================== 
@@ -57,9 +104,14 @@ int DLLEXPORT Initialize( cl_enginefunc_t *pEnginefuncs, int iVersion )
 
 	gEngfuncs = *pEnginefuncs;
 
+	// Register cvar to allow using old touch menus (1 = use old cfg-based menus)
+
+	CVAR_CREATE("cl_oldtouchmenus", "0", FCVAR_CLIENTDLL | FCVAR_ARCHIVE);
+
 	sscanf( CVAR_GET_STRING( "host_ver" ), "%d", &g_iXash );
 
 	Game_HookEvents();
+	CL_LoadParticleMan();
 
 	return 1;
 }
@@ -76,6 +128,17 @@ void DLLEXPORT HUD_Shutdown( void )
 	gHUD.Shutdown();
 	Input_Shutdown();
 	Localize_Free();
+	g_Environment.Clear();
+	if (g_pParticleMan)
+	{
+		CL_UnloadParticleMan();
+	}
+	auto miniMem = CMiniMem::Instance();
+	if (miniMem)
+	{
+		miniMem->Reset();
+		miniMem->Shutdown();
+	}
 }
 
 
@@ -188,7 +251,12 @@ int DLLEXPORT HUD_VidInit( void )
 
 	isLoaded = true;
 
-	//VGui_Startup();
+	if (g_pParticleMan)
+	{
+		g_pParticleMan->ResetParticles();
+		g_Environment.Reset();
+		g_Environment.RestoreWeather();
+	}
 
 	return 1;
 }
@@ -205,8 +273,15 @@ the hud variables.
 
 void DLLEXPORT HUD_Init( void )
 {
+	LoadMenuInterface();
 	InitInput();
 	gHUD.Init();
+	
+	// Initialize menu if it's loaded
+	if( g_pMenu && !g_pMenu->Initialize( Sys_GetFactoryThis() ) )
+	{
+		gEngfuncs.Con_Printf( "Warning: Menu initialization failed\n" );
+	}
 	//Scheme_Init();
 }
 
@@ -258,7 +333,7 @@ Called at start and end of demos to restore to "non"HUD state.
 
 void DLLEXPORT HUD_Reset( void )
 {
-	gHUD.VidInit();
+	gHUD.Reset();
 }
 
 /*
@@ -275,6 +350,17 @@ void DLLEXPORT HUD_Frame( double time )
 	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
 #endif
 
+	// Handle menu input and mouse movement
+	if( g_pMenu )
+	{
+		int x = 0, y = 0;
+		if( g_pMenu->IsActive() )
+		{
+			gEngfuncs.GetMousePosition( &x, &y );
+			g_pMenu->MouseMove( x, y );
+		}
+	}
+
 	GetClientVoice()->Frame( time );
 }
 
@@ -290,8 +376,7 @@ Called when a player starts or stops talking.
 void DLLEXPORT HUD_VoiceStatus(int entindex, qboolean bTalking)
 {
 	// gHUD.m_Radio.Voice( entindex, bTalking );
-
-	if ( entindex >= 0 && entindex < gEngfuncs.GetMaxClients() )
+	if ( entindex > 0 && entindex <= gEngfuncs.GetMaxClients() )
 	{
 		if ( bTalking )
 		{
@@ -342,7 +427,7 @@ int DLLEXPORT HUD_GetRenderInterface( int version, render_api_t *renderfuncs, re
 	// we have here a Host_Error, so check Xash for version
 	if( g_iXash < MIN_XASH_VERSION )
 	{
-		gRenderAPI.Host_Error("Xash3D version check failed!\nPlease update your Xash3D!\n");
+		gRenderAPI.Host_Error("Xash3D FWGS version check failed!\nPlease update your Xash3D FWGS!\n");
 	}
 
 	return true;
@@ -416,9 +501,27 @@ extern "C" void DLLEXPORT HUD_ChatInputPosition( int *x, int *y )
 extern "C" int DLLEXPORT HUD_GetPlayerTeam(int iplayer)
 {
 	// original seems to return team_id, but I'm not sure it's even set somewhere
-	if ( iplayer <= MAX_PLAYERS )
+	if ( iplayer >= 1 && iplayer <= MAX_PLAYERS )
 		return g_PlayerExtraInfo[iplayer].teamnumber;
 	return 0;
+}
+
+void CL_UnloadParticleMan()
+{
+	if (g_pParticleMan)
+	{
+		delete g_pParticleMan;
+		g_pParticleMan = NULL;
+	}
+}
+
+void CL_LoadParticleMan()
+{
+	g_pParticleMan = new IParticleMan_Active();
+	if (g_pParticleMan)
+	{
+		g_pParticleMan->SetUp(&gEngfuncs);
+	}
 }
 
 #include "APIProxy.h"
@@ -520,7 +623,26 @@ public:
 			GetClientVoice()->SetPlayerBlockedState( playerIndex, false );
 		}
 	}
+
+	const char *GetLevelName( void ) override
+	{
+		const char *fullname = gEngfuncs.pfnGetLevelName();
+		if( fullname[0] )
+		{
+			strncpy( mapname, fullname + 5, sizeof( mapname ));
+			mapname[strlen(mapname) - 4] = '\0';
+		}
+		else mapname[0] = 0;
+
+		return mapname;
+	}
+
+	int GetLocalPlayerTeam() override
+	{
+		return g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber;
+	}
+private:
+	char mapname[64];
 };
 
 EXPOSE_SINGLE_INTERFACE(CClientExports, IGameClientExports, GAMECLIENTEXPORTS_INTERFACE_VERSION)
-

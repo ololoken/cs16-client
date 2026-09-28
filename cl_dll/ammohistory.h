@@ -46,7 +46,12 @@ public:
 ///// WEAPON /////
 	int			iOldWeaponBits;
 
-	WEAPON *GetWeapon( int iId ) { return &rgWeapons[iId]; }
+	WEAPON *GetWeapon( int iId )
+	{
+		if ( iId < 0 || iId >= MAX_WEAPONS )
+			return NULL;
+		return &rgWeapons[iId];
+	}
 	void AddWeapon( WEAPON *wp ) 
 	{ 
 		rgWeapons[ wp->iId ] = *wp;	
@@ -89,9 +94,12 @@ public:
 	int HasAmmo( WEAPON *p );
 
 ///// AMMO /////
-	AMMO GetAmmo( int iId ) { return iId; }
-
-	void SetAmmo( int iId, int iCount ) { riAmmo[ iId ] = iCount;	}
+	void SetAmmo( int iId, int iCount )
+	{
+		if ( iId < 0 || iId >= MAX_AMMO_TYPES )
+			return;
+		riAmmo[ iId ] = iCount;
+	}
 
 	int CountAmmo( int iId );
 

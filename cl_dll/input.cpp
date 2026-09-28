@@ -137,6 +137,7 @@ int KB_ConvertString( char *in, char **ppout )
 	char *p;
 	char *pOut;
 	char *pEnd;
+	char *pLimit = sz + sizeof( sz ) - 1; // reserve one byte for the terminator
 	const char *pBinding;
 
 	if ( !ppout )
@@ -145,7 +146,7 @@ int KB_ConvertString( char *in, char **ppout )
 	*ppout = NULL;
 	p = in;
 	pOut = sz;
-	while ( *p )
+	while ( *p && pOut < pLimit )
 	{
 		if ( *p == '+' )
 		{
@@ -166,7 +167,8 @@ int KB_ConvertString( char *in, char **ppout )
 
 			if ( pBinding )
 			{
-				*pOut++ = '[';
+				if ( pOut < pLimit )
+					*pOut++ = '[';
 				pEnd = (char *)pBinding;
 			}
 			else
@@ -174,12 +176,12 @@ int KB_ConvertString( char *in, char **ppout )
 				pEnd = binding;
 			}
 
-			while ( *pEnd )
+			while ( *pEnd && pOut < pLimit )
 			{
 				*pOut++ = *pEnd++;
 			}
 
-			if ( pBinding )
+			if ( pBinding && pOut < pLimit )
 			{
 				*pOut++ = ']';
 			}
@@ -365,6 +367,9 @@ Return 1 to allow engine to process the key, otherwise, act on it as needed
 */
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
+	if( g_pMenu )
+		g_pMenu->Key( keynum, down );
+
 	return 1;
 }
 
@@ -685,13 +690,8 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 			}
 		}	
 
-		// adjust for speed key
-		if ( in_speed.state & 1 )
-		{
-			cmd->forwardmove *= cl_movespeedkey->value;
-			cmd->sidemove *= cl_movespeedkey->value;
-			cmd->upmove *= cl_movespeedkey->value;
-		}
+		// Allow mice and other controllers to add their inputs
+		IN_Move ( frametime, cmd );
 
 		// clip to maxspeed
 		spd = gEngfuncs.GetClientMaxspeed();
@@ -709,8 +709,17 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 			}
 		}
 
-		// Allow mice and other controllers to add their inputs
-		IN_Move ( frametime, cmd );
+		// adjust for speed key
+		if ( in_speed.state & 1 )
+		{
+			float speed = cl_movespeedkey->value;
+			if ( speed > 0.52f )
+				speed = 0.52f;
+
+			cmd->forwardmove *= speed;
+			cmd->sidemove *= speed;
+			cmd->upmove *= speed;
+		}
 	}
 
 	cmd->impulse = in_impulse;
